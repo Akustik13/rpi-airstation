@@ -9,7 +9,7 @@
 пересунути (прилипання до сітки); тягнути кут — змінити розмір; Delete — видалити.
 Кнопки: New / Load / Save. Усе пише той самий JSON, що читає станція.
 """
-import sys, os, glob
+import sys, os, glob, subprocess
 import pygame
 import gridui as G
 try:
@@ -53,6 +53,42 @@ def main():
         p = path or f'layouts/{name}.json'
         G.save_layout(layout, p)
         return p
+
+    def _git_root():
+        d = os.path.dirname(os.path.abspath(__file__))
+        while True:
+            if os.path.isdir(os.path.join(d, '.git')):
+                return d
+            nd = os.path.dirname(d)
+            if nd == d:
+                return None
+            d = nd
+
+    def git_push():
+        """Зберігає дизайн і пушить папку layouts у GitHub. Повертає статус-рядок."""
+        save()
+        root = _git_root()
+        if not root:
+            return 'Не знайдено .git — це не клон репозиторію'
+
+        def run(args):
+            return subprocess.run(['git'] + args, cwd=root, capture_output=True,
+                                  text=True, timeout=60)
+        try:
+            run(['add', 'layouts'])
+            c = run(['commit', '-m', 'designs: update layouts'])
+            # commit може повернути "nothing to commit" — це не помилка
+            p = run(['push'])
+            if p.returncode == 0:
+                return 'Залито на GitHub ✓'
+            err = (p.stderr or p.stdout or '').strip().splitlines()
+            return 'Помилка push: ' + (err[-1] if err else 'невідома')
+        except FileNotFoundError:
+            return 'git не встановлено або не в PATH'
+        except subprocess.TimeoutExpired:
+            return 'Таймаут (перевір інтернет/авторизацію)'
+        except Exception as e:
+            return 'Помилка: ' + str(e)[:60]
 
     font = pygame.font.SysFont('dejavusans', 18)
     fontb = pygame.font.SysFont('dejavusans', 20, bold=True)
@@ -109,6 +145,7 @@ def main():
                         if name == 'save': msg[0] = 'Saved: ' + save()
                         elif name == 'new': layout['blocks'].clear(); sel[0] = None
                         elif name == 'grid': layout['_showgrid'] = not layout.get('_showgrid', True)
+                        elif name == 'github': msg[0] = git_push()
                         break
                 else:
                     # канва пристрою
@@ -198,14 +235,14 @@ def main():
         # ── нижній тулбар ──
         tool_rects = {}
         ty = DEV_H + 12
-        for i, (name, label, col) in enumerate([('new', 'Новий', C.ORANGE), ('grid', 'Сітка', C.CYAN), ('save', 'Зберегти', C.GREEN)]):
+        for i, (name, label, col) in enumerate([('new', 'Новий', C.ORANGE), ('grid', 'Сітка', C.CYAN), ('save', 'Зберегти', C.GREEN), ('github', '⬆ GitHub', C.BLUE)]):
             rect = pygame.Rect(20 + i * 160, ty, 150, 40)
             pygame.draw.rect(screen, tuple(int(x * 0.3) for x in col), rect, border_radius=8)
             pygame.draw.rect(screen, col, rect, 1, border_radius=8)
             txt(label, fontb, col, rect.centerx - fontb.size(label)[0] // 2, rect.y + 8)
             tool_rects[name] = rect
-        txt(msg[0], font, C.YELLOW, 520, ty + 10)
-        txt('Ctrl+S — зберегти · Delete — видалити · тягни кут — розмір', small, C.MUTED, 520, ty + 30)
+        txt(msg[0], font, C.YELLOW, 690, ty + 10)
+        txt('Ctrl+S — зберегти · Delete — видалити · тягни кут — розмір', small, C.MUTED, 690, ty + 30)
 
         pygame.display.flip()
         clock.tick(30)
