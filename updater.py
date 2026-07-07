@@ -124,3 +124,16 @@ def restart():
         os.execv(sys.executable, [sys.executable] + sys.argv)
     except Exception:
         os._exit(0)
+
+def reboot():
+    """Найнадійніший спосіб застосувати оновлення на кіоску — перезавантажити Pi.
+    Пробує sudo reboot; якщо не вдалось — execv/вихід."""
+    import subprocess
+    for cmd in (['sudo', '-n', 'reboot'], ['sudo', 'reboot'], ['reboot']):
+        try:
+            subprocess.Popen(cmd)
+            return True
+        except Exception:
+            continue
+    restart()
+    return False

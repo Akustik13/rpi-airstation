@@ -378,6 +378,62 @@ def _b_label(surf, rect, p, data):
     draw_text(surf, p.get('text', 'Текст'), fit_font(p.get('text', ''), w - 12, min(h*0.7, 28), p.get('bold', True)),
               C.TEXT2, x + w // 2, y + h // 2, 'mc')
 
+def _kp_color(k):
+    if k is None: return C.MUTED
+    if k < 4: return C.GREEN
+    if k < 5: return C.YELLOW
+    if k < 7: return C.ORANGE
+    return C.RED
+
+def _b_astro(surf, rect, p, data):
+    card(surf, rect, 'Астро', C.PURPLE)
+    x, y, w, h = rect
+    prev = surf.get_clip(); surf.set_clip(pygame.Rect(rect))
+    # місяць ліворуч
+    mr = min(int(h * 0.28), 46)
+    moon_disc(surf, x + 24 + mr, y + 52 + mr, mr, data.get('moon_illum', 0.5), data.get('moon_wax', True))
+    draw_text(surf, data.get('moon_name', ''), fit_font(data.get('moon_name', ''), 2 * mr + 20, 16),
+              C.TEXT2, x + 24 + mr, y + 52 + 2 * mr + 12, 'mc')
+    # права частина
+    rx = x + 60 + 2 * mr
+    rw = x + w - rx - 16
+    # Kp-шкала магнітних бур
+    kp = data.get('kp')
+    draw_text(surf, 'Магнітні бурі (Kp)', font(15), C.MUTED, rx, y + 44, 'tl')
+    bar = (rx, y + 68, rw, 16)
+    for i in range(int(rw)):
+        kk = i / max(rw - 1, 1) * 9
+        pygame.draw.line(surf, _kp_color(kk), (rx + i, bar[1]), (rx + i, bar[1] + bar[3]))
+    pygame.draw.rect(surf, C.BORDER, bar, 1, border_radius=5)
+    for gk in (5, 6, 7, 8):
+        gx = rx + int(rw * gk / 9)
+        pygame.draw.line(surf, (12, 18, 30), (gx, bar[1]), (gx, bar[1] + bar[3]), 1)
+    if kp is not None:
+        mx = rx + int(rw * max(0, min(1, kp / 9.0)))
+        pygame.draw.polygon(surf, C.WHITE, [(mx, bar[1] - 3), (mx - 6, bar[1] - 12), (mx + 6, bar[1] - 12)])
+    klab = data.get('kp_label', '—')
+    kcol = _kp_color(kp)
+    draw_text(surf, f"Kp {'—' if kp is None else f'{kp:.0f}'}  ·  {klab}", font(min(int(h*0.14),20), True),
+              kcol, rx, y + 92, 'tl')
+    # ретроград
+    retro = data.get('retro', [])
+    rtxt = 'Ретроград: ' + (', '.join(retro) if retro else 'немає')
+    draw_text(surf, rtxt, fit_font(rtxt, rw, 18), C.TEXT2, rx, y + 122, 'tl')
+    # порада дня
+    adv = data.get('advice', '')
+    if adv and h > 150:
+        words = adv.split(' '); lines = ['']
+        af = font(16)
+        for wd in words:
+            if af.size(lines[-1] + ' ' + wd)[0] > w - 48:
+                lines.append(wd)
+            else:
+                lines[-1] = (lines[-1] + ' ' + wd).strip()
+        draw_text(surf, '💡 Порада дня:', font(15), C.YELLOW, x + 24, y + h - 24 - 22 * min(len(lines), 2), 'tl')
+        for i, ln in enumerate(lines[:2]):
+            draw_text(surf, ln, af, C.TEXT2, x + 24, y + h - 22 * (min(len(lines), 2) - i) - 2, 'tl')
+    surf.set_clip(prev)
+
 BLOCKS = {
     'clock': ('Годинник', _b_clock),
     'datetime': ('Дата', _b_datetime),
@@ -391,6 +447,7 @@ BLOCKS = {
     'suntimes': ('Схід/захід', _b_suntimes),
     'uv': ('УФ-індекс', _b_uv),
     'outdoor': ('Надворі (BLE)', _b_outdoor),
+    'astro': ('Астро', _b_astro),
     'label': ('Напис', _b_label),
 }
 
@@ -432,5 +489,7 @@ def demo_data():
         'sunrise': '05:17', 'sunset': '21:17', 'moon_illum': 0.94, 'moon_wax': False, 'moon_name': 'Спадний',
         'forecast_icon': 'rain', 'forecast_text': 'Тиск падає — очікуються опади', 'forecast_rate': -2.0,
         'wind': 12, 'uv': 4, 'uv_est': True, 'online': False, 'out_temp': '13.3',
+        'kp': 5.3, 'kp_label': 'буря G1', 'retro': ['Меркурій', 'Сатурн'],
+        'advice': 'Провітрюйте приміщення — свіже повітря бадьорить і покращує концентрацію.',
         'pressure_series': [(now - (96 - i) * 900, 1008 - i * 0.06 + math.sin(i / 6) * 1.2) for i in range(96)],
     }

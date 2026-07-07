@@ -248,3 +248,74 @@ def wmo_icon(code):
     if c >= 51:
         return 'rain'
     return 'partly'
+
+
+# ─────────────────────────── Астро: магнітні бурі (Kp) ────────────────────────
+
+def kp_status(kp):
+    """Kp-індекс (0..9) → (мітка, G-рівень, частка_0..1). Геомагнітні бурі
+    за шкалою NOAA: Kp5=G1 … Kp9=G5."""
+    if kp is None:
+        return ('—', '', 0.0)
+    try:
+        k = float(kp)
+    except Exception:
+        return ('—', '', 0.0)
+    frac = max(0.0, min(1.0, k / 9.0))
+    if k < 4:
+        return ('спокійно', '', frac)
+    if k < 5:
+        return ('неспокійно', '', frac)
+    g = {5: 'G1', 6: 'G2', 7: 'G3', 8: 'G4'}.get(int(k), 'G5')
+    return ('буря ' + g, g, frac)
+
+# ─────────────────────────── Астро: ретроградність (таблиця 2026) ─────────────
+# Наближені періоди на 2026 рік як (місяць,день)-діапазони. Легко редагувати.
+# Це НЕ обчислення ефемерид, а вшита таблиця (як і домовлялись).
+_RETRO_2026 = {
+    'Меркурій': [((2, 26), (3, 20)), ((6, 29), (7, 23)), ((10, 24), (11, 13))],
+    'Венера':   [((10, 3), (11, 13))],
+    'Марс':     [],
+    'Юпітер':   [((1, 1), (2, 4)), ((11, 15), (12, 31))],
+    'Сатурн':   [((7, 13), (11, 28))],
+}
+_RETRO_EN = {'Меркурій': 'Mercury', 'Венера': 'Venus', 'Марс': 'Mars', 'Юпітер': 'Jupiter', 'Сатурн': 'Saturn'}
+
+def retrograde(dt=None, lang='uk'):
+    """Список планет у ретрограді на дату (за вшитою таблицею 2026)."""
+    if dt is None:
+        dt = datetime.now()
+    md = (dt.month, dt.day)
+    out = []
+    for planet, ranges in _RETRO_2026.items():
+        for (a, b) in ranges:
+            if a <= md <= b:
+                out.append(planet if lang == 'uk' else _RETRO_EN.get(planet, planet))
+                break
+    return out
+
+# ─────────────────────────── Астро: порада дня ────────────────────────────────
+_ADVICE_UK = [
+    'Провітрюйте приміщення — свіже повітря бадьорить.',
+    'Пийте більше води протягом дня.',
+    'Зробіть коротку прогулянку на денному світлі.',
+    'Пориньте у справу без поспіху — день сприяє зосередженню.',
+    'Лягайте спати трохи раніше — відпочинок важливий.',
+    'Розтягніться і подихайте глибоко кілька хвилин.',
+    'Гарний день, щоб навести лад на робочому столі.',
+]
+
+def advice_of_day(dt=None, kp=None, uv=None, moon_idx=None, lang='uk'):
+    if dt is None:
+        dt = datetime.now()
+    st = kp_status(kp)
+    if st[1]:  # є геомагнітна буря
+        return ('Магнітна буря — чутливим людям варто берегтися, менше стресу і кофеїну.'
+                if lang == 'uk' else 'Geomagnetic storm — sensitive people take care, less stress and caffeine.')
+    if uv is not None and uv >= 6:
+        return ('Високий УФ — сонцезахист і головний убір, уникайте полуденного сонця.'
+                if lang == 'uk' else 'High UV — use sunscreen and a hat, avoid midday sun.')
+    if moon_idx == 4:
+        return ('Повня — можливий неспокійний сон, не переїдайте на ніч.'
+                if lang == 'uk' else 'Full moon — sleep may be restless, avoid heavy late meals.')
+    return _ADVICE_UK[dt.timetuple().tm_yday % len(_ADVICE_UK)]

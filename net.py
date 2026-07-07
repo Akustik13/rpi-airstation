@@ -9,7 +9,7 @@ from urllib.request import urlopen, Request
 
 ONLINE = [False]
 _LOCK = threading.Lock()
-DATA = {'wind_kmh': None, 'wind_dir': None, 'uv': None, 'daily': [], 'ts': 0.0}
+DATA = {'wind_kmh': None, 'wind_dir': None, 'uv': None, 'daily': [], 'kp': None, 'ts': 0.0}
 _started = [False]
 
 def is_online():
@@ -36,6 +36,19 @@ def _fetch(lat, lon):
     with urlopen(req, timeout=6) as r:
         return json.load(r)
 
+def _fetch_kp():
+    """Останній планетарний Kp-індекс з NOAA SWPC (безкоштовно, без ключа)."""
+    url = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'
+    with urlopen(Request(url, headers=_UA), timeout=6) as r:
+        rows = json.load(r)
+    # перший рядок — заголовок; беремо останнє значення Kp
+    if isinstance(rows, list) and len(rows) > 1:
+        try:
+            return float(rows[-1][1])
+        except Exception:
+            return None
+    return None
+
 def _worker(get_latlon):
     while True:
         on = _check_socket()
@@ -61,6 +74,12 @@ def _worker(get_latlon):
                                  'wind_dir': cur.get('wind_direction_10m'),
                                  'uv': cur.get('uv_index'),
                                  'daily': daily, 'ts': time.time()})
+            except Exception:
+                pass
+            try:
+                kp = _fetch_kp()
+                with _LOCK:
+                    DATA['kp'] = kp
             except Exception:
                 pass
         time.sleep(900 if on else 30)

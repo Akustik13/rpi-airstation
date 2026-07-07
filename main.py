@@ -5172,6 +5172,8 @@ def _grid_data():
     fc = _wx_forecast()
     _n, _t0, prows = _window_series('pressure', 24)
     wind = _wx_wind(); uv, uvest = _wx_uv()
+    kp = net.get().get('kp')
+    klab = wx.kp_status(kp)[0]
     return {
         'time_hm': now.strftime('%H:%M'), 'time_s': now.strftime('%S'),
         'date': now.strftime('%d.%m.%Y'), 'weekday': i18n.weekdays()[now.weekday()],
@@ -5187,6 +5189,8 @@ def _grid_data():
         'forecast_icon': fc['icon'], 'forecast_text': fc['text_uk'] if i18n.get_lang() == 'uk' else fc['text_en'],
         'forecast_rate': fc['rate'], 'wind': wind, 'uv': uv, 'uv_est': uvest,
         'online': _net_online(), 'out_temp': '13.3', 'pressure_series': prows,
+        'kp': kp, 'kp_label': klab, 'retro': wx.retrograde(now, i18n.get_lang()),
+        'advice': wx.advice_of_day(now, kp=kp, uv=uv, moon_idx=idx, lang=i18n.get_lang()),
     }
 
 def _draw_grid_screen(name):
@@ -5229,10 +5233,15 @@ def _screen_name(sid):
     return _SCREEN_NAMES.get(sid, sid)
 
 def _car_list():
-    """Впорядкований список УВІМКНЕНИХ екранів (карусель). Порожньо → усі вбудовані."""
+    """Впорядкований список УВІМКНЕНИХ екранів (карусель).
+    Порожньо (не налаштовано) → усі вбудовані + кастомні, щоб нові екрани
+    (напр. астро) було видно одразу. Після налаштування — точно вибір користувача."""
     avail = set(_car_available())
     en = db.get_setting('carousel', '').strip()
-    lst = [s for s in en.split(',') if s] if en else list(SCREENS)
+    if en:
+        lst = [s for s in en.split(',') if s]
+    else:
+        lst = list(SCREENS) + _custom_layouts()
     lst = [s for s in lst if s in avail]
     return lst or ['air']
 
@@ -5662,17 +5671,22 @@ def _ota_apply(what='all'):
         ok, msg = updater.download_and_apply(what, log=lambda m: _ota.__setitem__('status', m))
         _ota['status'] = msg; _ota['busy'] = False
         if ok and what == 'all':
-            time.sleep(1.2)
+            _ota['status'] = 'Оновлено ✓ Перезавантаження…'
+            time.sleep(1.5)
             try:
                 poller.stop()
             except Exception:
                 pass
-            pygame.quit()
-            updater.restart()
+            try:
+                pygame.quit()
+            except Exception:
+                pass
+            updater.reboot()
     threading.Thread(target=_w, daemon=True).start()
 
 def _ota_auto_check_on_open():
-    if not _ota['checked'] and not _ota['busy']:
+    # Завжди свіжа перевірка при вході на екран (без кешу).
+    if not _ota['busy']:
         _ota_check()
 
 def draw_about_screen():
