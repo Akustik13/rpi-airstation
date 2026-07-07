@@ -1,0 +1,97 @@
+
+1. Увімкнути I²C
+sudo raspi-config
+
+Далі:
+
+Interface Options → I2C → Enable
+
+Потім:
+
+sudo reboot
+
+Після reboot перевір:
+
+ls /dev/i2c*
+
+Має бути:
+
+/dev/i2c-1
+2. Встановити системні пакети
+sudo apt update
+sudo apt install -y \
+i2c-tools \
+python3-pip \
+python3-pygame \
+python3-smbus \
+xinput-calibrator \
+lxterminal \
+unclutter
+3. Перевірити I²C сенсори
+i2cdetect -y 1
+
+Очікувано:
+
+62  - SCD41
+59  - SGP41
+69  - SPS30
+76/77 - BMP280
+4. Скопіювати програму
+
+Папка має бути:
+
+/home/pi/AirStation
+
+Всередині:
+
+run.py
+main.py
+sensors.py
+config.py
+db.py
+requirements.txt
+install.sh
+...
+5. Встановити Python бібліотеки
+cd /home/pi/AirStation
+python3 -m pip install -r requirements.txt
+
+Або просто:
+
+cd /home/pi/AirStation
+chmod +x install.sh
+./install.sh
+6. Автозапуск
+sudo nano /etc/systemd/system/airstation.service
+
+Встав:
+
+[Unit]
+Description=AirStation
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/AirStation
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStart=/usr/bin/python3 /home/pi/AirStation/run.py --fullscreen
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target
+
+Потім:
+
+sudo systemctl daemon-reload
+sudo systemctl enable airstation.service
+sudo reboot
+7. Перевірка після старту
+systemctl status airstation.service
+
+Для логів:
+
+journalctl -u airstation.service -n 50 --no-pager

@@ -1,0 +1,8 @@
+pygame
+smbus2
+bmp280
+sensirion-i2c-driver
+sensirion-i2c-scd4x
+sensirion-i2c-sgp4x
+sensirion-i2c-sps30
+sensirion-gas-index-algorithm

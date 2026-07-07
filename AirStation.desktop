@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AirStation
+Comment=Start AirStation fullscreen
+Exec=/usr/bin/python3 /home/pi/AirStation/run.py --fullscreen
+Path=/home/pi/AirStation
+Icon=utilities-terminal
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true

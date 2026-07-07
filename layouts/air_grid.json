@@ -1,0 +1,89 @@
+{
+  "name": "Повітря (grid)",
+  "cols": 16,
+  "rows": 9,
+  "blocks": [
+    {
+      "type": "clock",
+      "col": 11,
+      "row": 0,
+      "w": 5,
+      "h": 2,
+      "p": {
+        "seconds": true
+      }
+    },
+    {
+      "type": "metric",
+      "col": 0,
+      "row": 0,
+      "w": 4,
+      "h": 2,
+      "p": {
+        "key": "temperature",
+        "icon": true
+      }
+    },
+    {
+      "type": "metric",
+      "col": 4,
+      "row": 0,
+      "w": 4,
+      "h": 2,
+      "p": {
+        "key": "humidity",
+        "icon": true
+      }
+    },
+    {
+      "type": "metric",
+      "col": 0,
+      "row": 2,
+      "w": 5,
+      "h": 3,
+      "p": {
+        "key": "co2"
+      }
+    },
+    {
+      "type": "metric",
+      "col": 5,
+      "row": 2,
+      "w": 5,
+      "h": 3,
+      "p": {
+        "key": "voc_index"
+      }
+    },
+    {
+      "type": "metric",
+      "col": 11,
+      "row": 2,
+      "w": 5,
+      "h": 3,
+      "p": {
+        "key": "aqi"
+      }
+    },
+    {
+      "type": "pressure_graph",
+      "col": 0,
+      "row": 5,
+      "w": 10,
+      "h": 4,
+      "p": {
+        "trend": true
+      }
+    },
+    {
+      "type": "gauge",
+      "col": 10,
+      "row": 5,
+      "w": 6,
+      "h": 4,
+      "p": {
+        "key": "co2"
+      }
+    }
+  ]
+}
