@@ -407,7 +407,13 @@ def _b_kp_storms(surf, rect, p, data):
             if ts:
                 draw_text(surf, _t.strftime('%H', _t.localtime(ts)), font(12), C.MUTED, bx + int(bw / 2), gy + gh + 4, 'tc')
     else:
-        draw_text(surf, 'дані з’являться при інтернеті', font(15), C.MUTED, gx + gw // 2, gy + gh // 2, 'mc')
+        if data.get('loading'):
+            msg = 'завантаження…'
+        elif not data.get('online'):
+            msg = 'немає інтернету'
+        else:
+            msg = 'очікування даних — тапни ⟳'
+        draw_text(surf, msg, font(16), C.MUTED, gx + gw // 2, gy + gh // 2, 'mc')
     kp = data.get('kp')
     draw_text(surf, f"Зараз: Kp {'—' if kp is None else f'{kp:.0f}'} · {data.get('kp_label','')}",
               font(min(int(h*0.11),19), True), _kp_col(kp), x + 20, y + gy - y + gh + 26, 'tl')
@@ -464,12 +470,13 @@ def _b_astro_moon(surf, rect, p, data):
     x, y, w, h = rect
     r = max(40, int(min(w, h) * 0.30))          # менший місяць
     cx, cy = x + w // 2, y + r + 22
-    # тепле світіння
-    glow = pygame.Surface((r * 4, r * 4), pygame.SRCALPHA)
-    for i in range(r * 2, 0, -6):
-        a = int(26 * (i / (r * 2)))
-        pygame.draw.circle(glow, (245, 220, 130, a), (r * 2, r * 2), i)
-    surf.blit(glow, (cx - r * 2, cy - r * 2))
+    # тепле світіння (компактне)
+    gr = int(r * 1.35)
+    glow = pygame.Surface((gr * 2, gr * 2), pygame.SRCALPHA)
+    for i in range(gr, 0, -5):
+        a = int(30 * (i / gr))
+        pygame.draw.circle(glow, (245, 220, 130, a), (gr, gr), i)
+    surf.blit(glow, (cx - gr, cy - gr))
     moon_disc(surf, cx, cy, r, data.get('moon_illum', 0.5), data.get('moon_wax', True), lit=(250, 226, 120))
     draw_text(surf, data.get('moon_name', ''), fit_font(data.get('moon_name', ''), w - 12, 24, True),
               (245, 235, 200), cx, cy + r + 22, 'mc')
@@ -481,17 +488,32 @@ def _b_astro_forecast(surf, rect, p, data):
     x, y, w, h = rect
     prev = surf.get_clip(); surf.set_clip(pygame.Rect(rect))
     txt = data.get('astro_forecast', '') or data.get('advice', '')
-    words = txt.split(' '); lines = ['']; af = font(min(int(h * 0.09), 18))
-    for wd in words:
-        if af.size(lines[-1] + ' ' + wd)[0] > w - 40:
-            lines.append(wd)
-        else:
-            lines[-1] = (lines[-1] + ' ' + wd).strip()
-    yy = y + 48
-    for ln in lines[:max(1, (h - 70) // 24)]:
-        draw_text(surf, ln, af, (222, 226, 245), x + 20, yy, 'tl'); yy += 24
+    area_x, area_y = x + 20, y + 46
+    area_w, area_h = w - 40, h - 66            # доступна зона під текст
+    target_h = int(area_h * 0.80)              # хочемо ~80% висоти боксу
+    # добираємо найбільший шрифт, за якого весь текст влазить у зону
+    chosen, chosen_lines = 16, []
+    for size in range(46, 13, -2):
+        f = font(size)
+        words = txt.split(' '); lines = ['']
+        for wd in words:
+            if f.size((lines[-1] + ' ' + wd).strip())[0] > area_w:
+                lines.append(wd)
+            else:
+                lines[-1] = (lines[-1] + ' ' + wd).strip()
+        lines = [l for l in lines if l]
+        lh = int(size * 1.35)
+        if len(lines) * lh <= area_h:
+            chosen, chosen_lines = size, lines
+            if len(lines) * lh >= target_h:    # достатньо великий, займає ~80%
+                break
+    f = font(chosen); lh = int(chosen * 1.35)
+    total_h = len(chosen_lines) * lh
+    yy = area_y + max(0, (area_h - 18 - total_h) // 2)   # вертикальне центрування
+    for ln in chosen_lines:
+        draw_text(surf, ln, f, (226, 230, 248), area_x, yy, 'tl'); yy += lh
     draw_text(surf, '* прикмети та традиції — для настрою, не медична порада',
-              font(12), C.MUTED, x + 20, y + h - 20, 'tl')
+              font(12), C.MUTED, x + 20, y + h - 18, 'tl')
     surf.set_clip(prev)
 
 def _b_label(surf, rect, p, data):
