@@ -2,87 +2,59 @@
   "name": "astro_grid",
   "cols": 16,
   "rows": 9,
+  "bg": "cosmic",
   "blocks": [
     {
-      "type": "location",
-      "col": 0,
-      "row": 0,
-      "w": 4,
-      "h": 1
-    },
-    {
-      "type": "datetime",
-      "col": 0,
-      "row": 1,
-      "w": 4,
-      "h": 1
-    },
-    {
       "type": "clock",
-      "col": 4,
+      "col": 0,
       "row": 0,
-      "w": 5,
+      "w": 6,
       "h": 2,
       "p": {
         "seconds": true
       }
     },
     {
-      "type": "suntimes",
-      "col": 9,
+      "type": "location",
+      "col": 6,
       "row": 0,
-      "w": 3,
-      "h": 2
+      "w": 5,
+      "h": 1
     },
     {
-      "type": "uv",
-      "col": 12,
-      "row": 0,
-      "w": 4,
-      "h": 2
+      "type": "datetime",
+      "col": 6,
+      "row": 1,
+      "w": 5,
+      "h": 1
     },
     {
-      "type": "astro",
+      "type": "astro_moon",
+      "col": 11,
+      "row": 0,
+      "w": 5,
+      "h": 5
+    },
+    {
+      "type": "kp_storms",
       "col": 0,
       "row": 2,
-      "w": 10,
-      "h": 7
+      "w": 11,
+      "h": 4
     },
     {
-      "type": "metric",
-      "col": 10,
-      "row": 2,
-      "w": 3,
-      "h": 3,
-      "p": {
-        "key": "temperature",
-        "icon": true
-      }
-    },
-    {
-      "type": "metric",
-      "col": 13,
-      "row": 2,
-      "w": 3,
-      "h": 3,
-      "p": {
-        "key": "humidity",
-        "icon": true
-      }
-    },
-    {
-      "type": "aqi_bar",
-      "col": 10,
+      "type": "retro",
+      "col": 11,
       "row": 5,
-      "w": 6,
-      "h": 2
+      "w": 5,
+      "h": 4
     },
     {
-      "type": "forecast",
-      "col": 10,
-      "row": 7,
-      "w": 6,
-      "h": 2
+      "type": "astro_forecast",
+      "col": 0,
+      "row": 6,
+      "w": 11,
+      "h": 3
     }
   ]
 }

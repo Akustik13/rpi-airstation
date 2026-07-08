@@ -5172,8 +5172,13 @@ def _grid_data():
     fc = _wx_forecast()
     _n, _t0, prows = _window_series('pressure', 24)
     wind = _wx_wind(); uv, uvest = _wx_uv()
-    kp = net.get().get('kp')
+    nd = net.get()
+    kp = nd.get('kp')
     klab = wx.kp_status(kp)[0]
+    lat, lon = _wx_latlon()
+    aurora = wx.aurora_chance(kp, lat, i18n.get_lang())
+    retro_detail = wx.retrograde_detail(now, i18n.get_lang())
+    retro_names = [d['planet'] for d in retro_detail]
     return {
         'time_hm': now.strftime('%H:%M'), 'time_s': now.strftime('%S'),
         'date': now.strftime('%d.%m.%Y'), 'weekday': i18n.weekdays()[now.weekday()],
@@ -5189,7 +5194,10 @@ def _grid_data():
         'forecast_icon': fc['icon'], 'forecast_text': fc['text_uk'] if i18n.get_lang() == 'uk' else fc['text_en'],
         'forecast_rate': fc['rate'], 'wind': wind, 'uv': uv, 'uv_est': uvest,
         'online': _net_online(), 'out_temp': '13.3', 'pressure_series': prows,
-        'kp': kp, 'kp_label': klab, 'retro': wx.retrograde(now, i18n.get_lang()),
+        'kp': kp, 'kp_label': klab, 'retro': retro_names,
+        'kp_hist': nd.get('kp_hist', []), 'kp_days': nd.get('kp_days', []),
+        'aurora': aurora, 'retro_detail': retro_detail,
+        'astro_forecast': wx.astro_forecast(kp, retro_names, idx, aurora, i18n.get_lang()),
         'advice': wx.advice_of_day(now, kp=kp, uv=uv, moon_idx=idx, lang=i18n.get_lang()),
     }
 

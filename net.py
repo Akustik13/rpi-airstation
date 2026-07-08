@@ -9,7 +9,8 @@ from urllib.request import urlopen, Request
 
 ONLINE = [False]
 _LOCK = threading.Lock()
-DATA = {'wind_kmh': None, 'wind_dir': None, 'uv': None, 'daily': [], 'kp': None, 'ts': 0.0}
+DATA = {'wind_kmh': None, 'wind_dir': None, 'uv': None, 'daily': [], 'kp': None,
+        'kp_hist': [], 'kp_days': [], 'ts': 0.0}
 _started = [False]
 
 def is_online():
@@ -49,6 +50,45 @@ def _fetch_kp():
             return None
     return None
 
+def _parse_ts(s):
+    import calendar
+    for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S'):
+        try:
+            return calendar.timegm(time.strptime(s.split('.')[0].replace('T', ' '), '%Y-%m-%d %H:%M:%S'))
+        except Exception:
+            continue
+    return None
+
+def _fetch_kp_hist():
+    """Останні ~8 значень Kp по 3 год (доба): список (ts, kp)."""
+    url = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'
+    with urlopen(Request(url, headers=_UA), timeout=6) as r:
+        rows = json.load(r)
+    out = []
+    for row in rows[1:]:
+        try:
+            ts = _parse_ts(row[0]); kp = float(row[1])
+            if ts is not None:
+                out.append((ts, kp))
+        except Exception:
+            continue
+    return out[-8:]
+
+def _fetch_kp_forecast():
+    """3-денний прогноз Kp з NOAA: список днів [{'date':'YYYY-MM-DD','max':kp}]."""
+    url = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json'
+    with urlopen(Request(url, headers=_UA), timeout=6) as r:
+        rows = json.load(r)
+    perday = {}
+    for row in rows[1:]:
+        try:
+            day = row[0].split(' ')[0]; kp = float(row[1])
+            perday[day] = max(perday.get(day, 0), kp)
+        except Exception:
+            continue
+    days = sorted(perday.keys())
+    return [{'date': d, 'max': perday[d]} for d in days[:3]]
+
 def _worker(get_latlon):
     while True:
         on = _check_socket()
@@ -77,9 +117,11 @@ def _worker(get_latlon):
             except Exception:
                 pass
             try:
-                kp = _fetch_kp()
+                hist = _fetch_kp_hist()
+                days = _fetch_kp_forecast()
+                kp = hist[-1][1] if hist else _fetch_kp()
                 with _LOCK:
-                    DATA['kp'] = kp
+                    DATA['kp'] = kp; DATA['kp_hist'] = hist; DATA['kp_days'] = days
             except Exception:
                 pass
         time.sleep(900 if on else 30)

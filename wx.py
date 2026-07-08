@@ -319,3 +319,125 @@ def advice_of_day(dt=None, kp=None, uv=None, moon_idx=None, lang='uk'):
         return ('Повня — можливий неспокійний сон, не переїдайте на ніч.'
                 if lang == 'uk' else 'Full moon — sleep may be restless, avoid heavy late meals.')
     return _ADVICE_UK[dt.timetuple().tm_yday % len(_ADVICE_UK)]
+
+
+# ══════════════════════════ Астро+ (розширення v6.27) ═════════════════════════
+# Повна таблиця ретроградів 2026 (наближено, як вшита таблиця — не ефемериди).
+# Формат: планета: [((start_m,start_d),(end_m,end_d)), ...]
+_RETRO_FULL_2026 = {
+    'Меркурій': [((2, 26), (3, 20)), ((6, 29), (7, 23)), ((10, 24), (11, 13))],
+    'Венера':   [((10, 3), (11, 13))],
+    'Марс':     [],
+    'Юпітер':   [((1, 1), (3, 11)), ((11, 15), (12, 31))],
+    'Сатурн':   [((7, 13), (11, 28))],
+    'Уран':     [((1, 1), (2, 4)), ((9, 6), (12, 31))],
+    'Нептун':   [((7, 4), (12, 10))],
+    'Плутон':   [((5, 4), (10, 13))],
+}
+_PLANET_EN = {'Меркурій': 'Mercury', 'Венера': 'Venus', 'Марс': 'Mars', 'Юпітер': 'Jupiter',
+              'Сатурн': 'Saturn', 'Уран': 'Uranus', 'Нептун': 'Neptune', 'Плутон': 'Pluto'}
+_PLANET_GLYPH = {'Меркурій': '☿', 'Венера': '♀', 'Марс': '♂', 'Юпітер': '♃',
+                 'Сатурн': '♄', 'Уран': '♅', 'Нептун': '♆', 'Плутон': '♇'}
+# Короткі описи + народні поради (тон C: факт + прикмета, з застереженням у UI).
+_PLANET_INFO = {
+    'Меркурій': ('спілкування, техніка, документи, поїздки',
+                 'Перечитуйте листи, не поспішайте з договорами, робіть резервні копії.'),
+    'Венера':   ('стосунки, гроші, краса, цінності',
+                 'Не час для великих покупок і різких змін образу; повертайтеся до старих справ.'),
+    'Марс':     ('енергія, дії, конфлікти, спорт',
+                 'Стримуйте імпульсивність, бережіть від травм, плануйте, а не рубайте з плеча.'),
+    'Юпітер':   ('зростання, навчання, плани, віра',
+                 'Перегляньте цілі й переконання; добре вчитися й доопрацьовувати старе.'),
+    'Сатурн':   ('дисципліна, обов’язки, структура',
+                 'Час підбити підсумки, навести лад у справах і межах, не братися за нове.'),
+    'Уран':     ('несподіванки, свобода, технології',
+                 'Перегляньте, де застрягли; можливі раптові інсайти — записуйте ідеї.'),
+    'Нептун':   ('мрії, інтуїція, творчість, ілюзії',
+                 'Довіряйте інтуїції, але перевіряйте факти; бережіться самообману.'),
+    'Плутон':   ('глибокі зміни, влада, трансформація',
+                 'Відпускайте старе; добрий час для внутрішньої роботи й переосмислення.'),
+}
+
+def _days_between(md_a, md_b, year=2026):
+    return (datetime(year, md_b[0], md_b[1]) - datetime(year, md_a[0], md_a[1])).days
+
+def retrograde_detail(dt=None, lang='uk'):
+    """Повний список планет у ретрограді з деталями:
+    {planet, glyph, start, end, days_left, total, progress, phase, area, advice}."""
+    if dt is None:
+        dt = datetime.now()
+    md = (dt.month, dt.day); out = []
+    for planet, ranges in _RETRO_FULL_2026.items():
+        for (a, b) in ranges:
+            if a <= md <= b:
+                total = max(1, _days_between(a, b))
+                left = max(0, _days_between(md, b))
+                prog = 1.0 - left / total
+                phase = ('початок' if prog < 0.34 else 'середина' if prog < 0.67 else 'кінець') if lang == 'uk' \
+                        else ('start' if prog < 0.34 else 'middle' if prog < 0.67 else 'end')
+                info = _PLANET_INFO.get(planet, ('', ''))
+                name = planet if lang == 'uk' else _PLANET_EN.get(planet, planet)
+                out.append({'planet': name, 'glyph': _PLANET_GLYPH.get(planet, '•'),
+                            'start': datetime(2026, a[0], a[1]).strftime('%d.%m'),
+                            'end': datetime(2026, b[0], b[1]).strftime('%d.%m'),
+                            'days_left': left, 'total': total, 'progress': prog,
+                            'phase': phase, 'area': info[0], 'advice': info[1]})
+                break
+    return out
+
+def retrograde_names(dt=None, lang='uk'):
+    return [d['planet'] for d in retrograde_detail(dt, lang)]
+
+# ─────────────────────────── Аврора для широти ────────────────────────────────
+# Наближено: мінімальний Kp, за якого аврора має шанс бути видимою (низько над
+# горизонтом) на даній географічній широті. Таблиця під північну півкулю.
+def aurora_min_kp(lat):
+    lat = abs(lat)
+    table = [(65, 1), (60, 3), (58, 4), (55, 5), (52, 6), (50, 7), (48, 8), (45, 9)]
+    for L, kp in table:
+        if lat >= L:
+            return kp
+    return 99  # практично не видно
+
+def aurora_chance(kp, lat, lang='uk'):
+    need = aurora_min_kp(lat)
+    if need >= 99:
+        txt = 'Аврора на цій широті практично не видна' if lang == 'uk' else 'Aurora practically not visible here'
+        return {'need': None, 'possible': False, 'text': txt}
+    possible = kp is not None and kp >= need
+    if lang == 'uk':
+        txt = (f'Аврора можлива! (Kp {kp:.0f} ≥ {need})' if possible
+               else f'Аврора — за Kp ≥ {need}' + (f' (зараз {kp:.0f})' if kp is not None else ''))
+    else:
+        txt = (f'Aurora possible! (Kp {kp:.0f} ≥ {need})' if possible
+               else f'Aurora at Kp ≥ {need}' + (f' (now {kp:.0f})' if kp is not None else ''))
+    return {'need': need, 'possible': possible, 'text': txt}
+
+def kp_bucket_color_name(kp):
+    if kp is None: return 'muted'
+    if kp < 4: return 'green'
+    if kp < 5: return 'yellow'
+    if kp < 7: return 'orange'
+    return 'red'
+
+
+def astro_forecast(kp, retro_list, moon_idx, aurora, lang='uk'):
+    """Комбінований «прогноз дня»: бурі + місяць + ретрогради → короткий текст
+    (тон C: факти + прикмета). Не медична порада."""
+    parts = []
+    st = kp_status(kp)
+    if st[1]:
+        parts.append('Геомагнітна буря ' + st[1] + ' — можлива втома й головний біль у чутливих; пийте воду, менше кофеїну.')
+    elif kp is not None and kp >= 4:
+        parts.append('Магнітосфера неспокійна — бережіть режим сну.')
+    if aurora and aurora.get('possible'):
+        parts.append('Є шанс побачити полярне сяйво — гляньте на північ уночі!')
+    if moon_idx == 4:
+        parts.append('Повня — емоції яскравіші, сон може бути чуйним.')
+    elif moon_idx == 0:
+        parts.append('Новий місяць — гарний час починати нове й ставити наміри.')
+    if retro_list:
+        parts.append('Ретроград: ' + ', '.join(retro_list) + ' — не поспішайте з важливими рішеннями, перевіряйте деталі.')
+    if not parts:
+        parts.append('Спокійний астрофон — гарний день для звичних справ і планів.')
+    return ' '.join(parts)

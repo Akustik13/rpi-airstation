@@ -373,6 +373,113 @@ def _b_outdoor(surf, rect, p, data):
     draw_num_unit(surf, data.get('out_temp', '13.3'), '°C', x + 64, y + h // 2 - 22, h * 0.45, 18, C.MUTED, C.MUTED, w * 0.5)
     draw_text(surf, 'заглушка BLE', font(14), C.MUTED, x + 16, y + h - 22, 'tl')
 
+def _b_kp_storms(surf, rect, p, data):
+    card(surf, rect, 'Магнітні бурі — Kp за добу', C.PURPLE)
+    x, y, w, h = rect
+    prev = surf.get_clip(); surf.set_clip(pygame.Rect(rect))
+    import time as _t
+    hist = data.get('kp_hist', [])[-8:]
+    gx, gy, gw, gh = x + 20, y + 46, w - 40, int(h * 0.42)
+    for i in range(4):
+        yy = gy + gh - int(gh * i / 3)
+        pygame.draw.line(surf, (60, 55, 90), (gx, yy), (gx + gw, yy), 1)
+        draw_text(surf, str(i * 3), font(12), C.MUTED, gx - 6, yy, 'mr')
+    if hist:
+        bw = gw / max(len(hist), 1)
+        for i, item in enumerate(hist):
+            try:
+                ts, kp = item
+            except Exception:
+                kp = item; ts = None
+            bh = int(gh * max(0.03, min(1.0, kp / 9.0)))
+            bx = gx + int(i * bw)
+            pygame.draw.rect(surf, _kp_col(kp), (bx + 2, gy + gh - bh, int(bw) - 4, bh), border_radius=3)
+            if ts:
+                draw_text(surf, _t.strftime('%H', _t.localtime(ts)), font(12), C.MUTED, bx + int(bw / 2), gy + gh + 4, 'tc')
+    else:
+        draw_text(surf, 'дані з’являться при інтернеті', font(15), C.MUTED, gx + gw // 2, gy + gh // 2, 'mc')
+    kp = data.get('kp')
+    draw_text(surf, f"Зараз: Kp {'—' if kp is None else f'{kp:.0f}'} · {data.get('kp_label','')}",
+              font(min(int(h*0.11),19), True), _kp_col(kp), x + 20, y + gy - y + gh + 26, 'tl')
+    # аврора
+    au = data.get('aurora', {})
+    draw_text(surf, au.get('text', ''), font(15), C.GREEN if au.get('possible') else C.TEXT2,
+              x + 20, y + gy - y + gh + 52, 'tl')
+    # 3-денний прогноз
+    days = data.get('kp_days', [])
+    if days and h > 150:
+        draw_text(surf, 'Прогноз:', font(15), C.MUTED, x + 20, y + h - 26, 'ml')
+        dx = x + 110
+        for d in days[:3]:
+            lab = _weekday_short(d.get('date', '')); mx = d.get('max', 0)
+            draw_text(surf, f"{lab} {mx:.0f}", font(16, True), _kp_col(mx), dx, y + h - 26, 'ml')
+            dx += 92
+    surf.set_clip(prev)
+
+def _weekday_short(datestr):
+    try:
+        import datetime as _dt
+        wd = _dt.datetime.strptime(datestr, '%Y-%m-%d').weekday()
+        return ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'][wd]
+    except Exception:
+        return '—'
+
+def _b_retro(surf, rect, p, data):
+    card(surf, rect, 'Ретроградні планети', C.CYAN)
+    x, y, w, h = rect
+    prev = surf.get_clip(); surf.set_clip(pygame.Rect(rect))
+    retro = data.get('retro_detail', [])
+    if not retro:
+        draw_text(surf, 'Усі планети в прямому русі ✦', font(20), C.GREEN, x + w // 2, y + h // 2, 'mc')
+        surf.set_clip(prev); return
+    rowh = min(46, (h - 52) // max(len(retro), 1))
+    yy = y + 48
+    for d in retro:
+        draw_text(surf, d.get('glyph', '•'), font(min(rowh, 30)), C.PURPLE, x + 24, yy + rowh // 2, 'mc')
+        draw_text(surf, d['planet'], font(min(int(rowh*0.5), 20), True), C.WHITE, x + 50, yy + rowh // 2 - 8, 'ml')
+        draw_text(surf, f"{d['start']}–{d['end']} · ще {d['days_left']} дн ({d['phase']})",
+                  font(13), C.TEXT2, x + 50, yy + rowh // 2 + 12, 'ml')
+        # прогрес-смуга періоду
+        bx = x + w - 180; bw = 160
+        pygame.draw.rect(surf, C.PANEL2, (bx, yy + rowh // 2 - 6, bw, 12), border_radius=6)
+        pygame.draw.rect(surf, C.PURPLE, (bx, yy + rowh // 2 - 6, int(bw * d['progress']), 12), border_radius=6)
+        yy += rowh
+    surf.set_clip(prev)
+
+def _b_astro_moon(surf, rect, p, data):
+    x, y, w, h = rect
+    r = min(w, h) // 2 - 26
+    cx, cy = x + w // 2, y + r + 18
+    # світіння
+    glow = pygame.Surface((r * 4, r * 4), pygame.SRCALPHA)
+    for i in range(r * 2, 0, -6):
+        a = int(30 * (i / (r * 2)))
+        pygame.draw.circle(glow, (180, 190, 230, a), (r * 2, r * 2), i)
+    surf.blit(glow, (cx - r * 2, cy - r * 2))
+    moon_disc(surf, cx, cy, r, data.get('moon_illum', 0.5), data.get('moon_wax', True))
+    draw_text(surf, data.get('moon_name', ''), fit_font(data.get('moon_name', ''), w - 12, 24, True),
+              (230, 230, 245), cx, cy + r + 20, 'mc')
+    draw_text(surf, f"Освітлення {int(data.get('moon_illum',0)*100)}%", font(15), (170, 175, 205),
+              cx, cy + r + 46, 'mc')
+
+def _b_astro_forecast(surf, rect, p, data):
+    card(surf, rect, 'Прогноз дня ✨', C.PURPLE)
+    x, y, w, h = rect
+    prev = surf.get_clip(); surf.set_clip(pygame.Rect(rect))
+    txt = data.get('astro_forecast', '') or data.get('advice', '')
+    words = txt.split(' '); lines = ['']; af = font(min(int(h * 0.09), 18))
+    for wd in words:
+        if af.size(lines[-1] + ' ' + wd)[0] > w - 40:
+            lines.append(wd)
+        else:
+            lines[-1] = (lines[-1] + ' ' + wd).strip()
+    yy = y + 48
+    for ln in lines[:max(1, (h - 70) // 24)]:
+        draw_text(surf, ln, af, (222, 226, 245), x + 20, yy, 'tl'); yy += 24
+    draw_text(surf, '* прикмети та традиції — для настрою, не медична порада',
+              font(12), C.MUTED, x + 20, y + h - 20, 'tl')
+    surf.set_clip(prev)
+
 def _b_label(surf, rect, p, data):
     x, y, w, h = rect
     draw_text(surf, p.get('text', 'Текст'), fit_font(p.get('text', ''), w - 12, min(h*0.7, 28), p.get('bold', True)),
@@ -448,6 +555,10 @@ BLOCKS = {
     'uv': ('УФ-індекс', _b_uv),
     'outdoor': ('Надворі (BLE)', _b_outdoor),
     'astro': ('Астро', _b_astro),
+    'kp_storms': ('Магнітні бурі', _b_kp_storms),
+    'retro': ('Ретроградні планети', _b_retro),
+    'astro_moon': ('Місяць (космос)', _b_astro_moon),
+    'astro_forecast': ('Прогноз дня', _b_astro_forecast),
     'label': ('Напис', _b_label),
 }
 
@@ -465,9 +576,40 @@ def draw_block(surf, block, data, W=None, H=None, cols=GRID_COLS, rows=GRID_ROWS
 def render_layout(surf, layout, data, W=None, H=None):
     W = W or C.W; H = H or C.H
     cols = layout.get('cols', GRID_COLS); rows = layout.get('rows', GRID_ROWS)
-    surf.fill(C.BG)
+    if layout.get('bg') == 'cosmic':
+        _draw_cosmic_bg(surf, W, H)
+    else:
+        surf.fill(C.BG)
     for b in layout.get('blocks', []):
         draw_block(surf, b, data, W, H, cols, rows)
+
+import random as _rnd
+def _draw_cosmic_bg(surf, W, H):
+    # градієнт індиго → майже чорний
+    for y in range(0, H, 2):
+        t = y / H
+        c = (int(16 + 8 * (1 - t)), int(12 + 6 * (1 - t)), int(34 + 20 * (1 - t)))
+        pygame.draw.line(surf, c, (0, y), (W, y)); pygame.draw.line(surf, c, (0, y + 1), (W, y + 1))
+    # м'яке світіння-туманність
+    for (cx, cy, rr, col) in [(int(W * 0.18), int(H * 0.25), 220, (40, 30, 80)),
+                              (int(W * 0.8), int(H * 0.7), 260, (30, 45, 90))]:
+        glow = pygame.Surface((rr * 2, rr * 2), pygame.SRCALPHA)
+        for i in range(rr, 0, -8):
+            a = int(22 * (i / rr))
+            pygame.draw.circle(glow, (col[0], col[1], col[2], a), (rr, rr), i)
+        surf.blit(glow, (cx - rr, cy - rr))
+    # зорі (детерміновані, не мерехтять)
+    st = _rnd.Random(42)
+    for _ in range(140):
+        x = st.randint(0, W); y = st.randint(0, H); b = st.randint(60, 255); s = st.choice([1, 1, 1, 2])
+        surf.fill((b, b, min(255, b + 20)), (x, y, s, s))
+
+def _kp_col(kp):
+    if kp is None: return C.MUTED
+    if kp < 4: return C.GREEN
+    if kp < 5: return C.YELLOW
+    if kp < 7: return C.ORANGE
+    return C.RED
 
 # ── Збереження / завантаження ─────────────────────────────────────────────────
 def save_layout(layout, path):
@@ -490,6 +632,14 @@ def demo_data():
         'forecast_icon': 'rain', 'forecast_text': 'Тиск падає — очікуються опади', 'forecast_rate': -2.0,
         'wind': 12, 'uv': 4, 'uv_est': True, 'online': False, 'out_temp': '13.3',
         'kp': 5.3, 'kp_label': 'буря G1', 'retro': ['Меркурій', 'Сатурн'],
+        'kp_hist': [(now - (7 - i) * 10800, [2, 3, 4, 5, 6, 5, 4, 5][i]) for i in range(8)],
+        'kp_days': [{'date': '2026-07-08', 'max': 5}, {'date': '2026-07-09', 'max': 4}, {'date': '2026-07-10', 'max': 6}],
+        'aurora': {'need': 8, 'possible': False, 'text': 'Аврора — за Kp ≥ 8 (зараз 5)'},
+        'retro_detail': [
+            {'planet': 'Меркурій', 'glyph': '☿', 'start': '29.06', 'end': '23.07', 'days_left': 8, 'total': 24, 'progress': 0.66, 'phase': 'середина', 'area': 'спілкування', 'advice': ''},
+            {'planet': 'Сатурн', 'glyph': '♄', 'start': '13.07', 'end': '28.11', 'days_left': 136, 'total': 138, 'progress': 0.01, 'phase': 'початок', 'area': 'дисципліна', 'advice': ''},
+            {'planet': 'Нептун', 'glyph': '♆', 'start': '04.07', 'end': '10.12', 'days_left': 148, 'total': 159, 'progress': 0.06, 'phase': 'початок', 'area': 'мрії', 'advice': ''}],
+        'astro_forecast': 'Геомагнітна буря G1 — бережіть режим сну. Ретроград: Меркурій, Сатурн — перевіряйте деталі й не поспішайте з рішеннями.',
         'advice': 'Провітрюйте приміщення — свіже повітря бадьорить і покращує концентрацію.',
         'pressure_series': [(now - (96 - i) * 900, 1008 - i * 0.06 + math.sin(i / 6) * 1.2) for i in range(96)],
     }
