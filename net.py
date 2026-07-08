@@ -46,27 +46,39 @@ def _fetch(lat, lon):
     with urlopen(req, timeout=6) as r:
         return json.load(r)
 
+def _row_kp(row):
+    """Витягує (time_str, kp) з рядка NOAA — байдуже, це dict чи list."""
+    try:
+        if isinstance(row, dict):
+            t = row.get('time_tag') or row.get('time')
+            kp = row.get('Kp', row.get('kp', row.get('kp_index')))
+            return t, (None if kp is None else float(kp))
+        if isinstance(row, (list, tuple)):
+            return row[0], float(row[1])   # рядок-заголовок дасть ValueError → пропуститься
+    except Exception:
+        return None, None
+    return None, None
+
 def _fetch_kp():
     """Останній планетарний Kp-індекс з NOAA SWPC (безкоштовно, без ключа)."""
     url = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'
     with urlopen(Request(url, headers=_UA), timeout=6) as r:
         rows = json.load(r)
-    # перший рядок — заголовок; беремо останнє значення Kp
-    if isinstance(rows, list) and len(rows) > 1:
-        try:
-            return float(rows[-1][1])
-        except Exception:
-            return None
+    for row in reversed(rows):
+        _t, kp = _row_kp(row)
+        if kp is not None:
+            return kp
     return None
 
 def _parse_ts(s):
     import calendar
-    for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S'):
-        try:
-            return calendar.timegm(time.strptime(s.split('.')[0].replace('T', ' '), '%Y-%m-%d %H:%M:%S'))
-        except Exception:
-            continue
-    return None
+    if not s:
+        return None
+    s = s.split('.')[0].replace('T', ' ')
+    try:
+        return calendar.timegm(time.strptime(s, '%Y-%m-%d %H:%M:%S'))
+    except Exception:
+        return None
 
 def _fetch_kp_hist():
     """Останні ~8 значень Kp по 3 год (доба): список (ts, kp)."""
@@ -74,13 +86,13 @@ def _fetch_kp_hist():
     with urlopen(Request(url, headers=_UA), timeout=6) as r:
         rows = json.load(r)
     out = []
-    for row in rows[1:]:
-        try:
-            ts = _parse_ts(row[0]); kp = float(row[1])
-            if ts is not None:
-                out.append((ts, kp))
-        except Exception:
+    for row in rows:
+        t, kp = _row_kp(row)
+        if kp is None:
             continue
+        ts = _parse_ts(t)
+        if ts is not None:
+            out.append((ts, kp))
     return out[-8:]
 
 def _fetch_kp_forecast():
@@ -90,14 +102,14 @@ def _fetch_kp_forecast():
         rows = json.load(r)
     today = time.strftime('%Y-%m-%d', time.gmtime())
     perday = {}
-    for row in rows[1:]:
-        try:
-            day = row[0].split(' ')[0]; kp = float(row[1])
-            if day < today:
-                continue
-            perday[day] = max(perday.get(day, 0), kp)
-        except Exception:
+    for row in rows:
+        t, kp = _row_kp(row)
+        if kp is None or not t:
             continue
+        day = t.split('T')[0].split(' ')[0]
+        if day < today:
+            continue
+        perday[day] = max(perday.get(day, 0), kp)
     days = sorted(perday.keys())
     return [{'date': d, 'max': perday[d]} for d in days[:3]]
 
