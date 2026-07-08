@@ -23,6 +23,7 @@ except Exception:
 GRID_COLS = 16
 GRID_ROWS = 9
 PAD = 8   # відступ між блоками
+HITS = []   # тап-регіони, які реєструють блоки: [(action, pygame.Rect)]
 
 # ── Шрифти з кешем (з курсивом) ───────────────────────────────────────────────
 _FC = {}
@@ -131,12 +132,12 @@ def ic_co2(surf, cx, cy, col=C.GREEN):
     pygame.draw.circle(surf, col, (cx - 10, cy), 11); pygame.draw.circle(surf, col, (cx + 6, cy - 6), 14)
     pygame.draw.circle(surf, col, (cx + 16, cy), 10); pygame.draw.rect(surf, col, (cx - 14, cy, 34, 12), border_radius=6)
     surf.blit(font(12, True).render('CO₂', True, (10, 20, 15)), (cx - 12, cy - 6))
-def moon_disc(surf, cx, cy, r, illum, wax):
+def moon_disc(surf, cx, cy, r, illum, wax, lit=(232, 232, 214)):
     pygame.draw.circle(surf, (18, 24, 40), (cx, cy), r + 3); pygame.draw.circle(surf, (60, 66, 84), (cx, cy), r)
     for yy in range(-r, r + 1):
         hw = int(math.sqrt(max(0, r * r - yy * yy))); tx = int(hw * (2 * illum - 1))
         x0, x1 = (tx, hw) if wax else (-hw, -tx)
-        if x1 > x0: pygame.draw.line(surf, (232, 232, 214), (cx + x0, cy + yy), (cx + x1, cy + yy))
+        if x1 > x0: pygame.draw.line(surf, lit, (cx + x0, cy + yy), (cx + x1, cy + yy))
     pygame.draw.circle(surf, (90, 96, 120), (cx, cy), r, 1)
 def sun_icon(surf, cx, cy, r, col=C.YELLOW):
     for a in range(0, 360, 45):
@@ -378,6 +379,15 @@ def _b_kp_storms(surf, rect, p, data):
     x, y, w, h = rect
     prev = surf.get_clip(); surf.set_clip(pygame.Rect(rect))
     import time as _t
+    # кнопка «оновити» + статус (правий верх)
+    rb = pygame.Rect(x + w - 44, y + 10, 34, 30)
+    pygame.draw.rect(surf, C.PANEL2, rb, border_radius=8); pygame.draw.rect(surf, C.ACCENT, rb, 1, border_radius=8)
+    draw_text(surf, '⟳', font(22), C.ACCENT, rb.centerx, rb.centery, 'mc')
+    HITS.append(('astro_refresh', rb))
+    if data.get('loading'):
+        draw_text(surf, 'завантаження…', font(13), C.YELLOW, x + w - 54, y + 24, 'mr')
+    elif data.get('kp_ts'):
+        draw_text(surf, 'оновлено ' + _t.strftime('%H:%M', _t.localtime(data['kp_ts'])), font(13), C.MUTED, x + w - 54, y + 24, 'mr')
     hist = data.get('kp_hist', [])[-8:]
     gx, gy, gw, gh = x + 20, y + 46, w - 40, int(h * 0.42)
     for i in range(4):
@@ -435,6 +445,8 @@ def _b_retro(surf, rect, p, data):
     rowh = min(46, (h - 52) // max(len(retro), 1))
     yy = y + 48
     for d in retro:
+        row_rect = pygame.Rect(x + 6, yy, w - 12, rowh)
+        HITS.append(('planet:' + d['planet'], row_rect))
         draw_text(surf, d.get('glyph', '•'), font(min(rowh, 30)), C.PURPLE, x + 24, yy + rowh // 2, 'mc')
         draw_text(surf, d['planet'], font(min(int(rowh*0.5), 20), True), C.WHITE, x + 50, yy + rowh // 2 - 8, 'ml')
         draw_text(surf, f"{d['start']}–{d['end']} · ще {d['days_left']} дн ({d['phase']})",
@@ -443,24 +455,26 @@ def _b_retro(surf, rect, p, data):
         bx = x + w - 180; bw = 160
         pygame.draw.rect(surf, C.PANEL2, (bx, yy + rowh // 2 - 6, bw, 12), border_radius=6)
         pygame.draw.rect(surf, C.PURPLE, (bx, yy + rowh // 2 - 6, int(bw * d['progress']), 12), border_radius=6)
+        draw_text(surf, 'ⓘ', font(16), C.CYAN, x + w - 16, yy + rowh // 2, 'mr')
         yy += rowh
+    draw_text(surf, 'тап по планеті — деталі', font(12), C.MUTED, x + 16, y + h - 14, 'ml')
     surf.set_clip(prev)
 
 def _b_astro_moon(surf, rect, p, data):
     x, y, w, h = rect
-    r = min(w, h) // 2 - 26
-    cx, cy = x + w // 2, y + r + 18
-    # світіння
+    r = max(40, int(min(w, h) * 0.30))          # менший місяць
+    cx, cy = x + w // 2, y + r + 22
+    # тепле світіння
     glow = pygame.Surface((r * 4, r * 4), pygame.SRCALPHA)
     for i in range(r * 2, 0, -6):
-        a = int(30 * (i / (r * 2)))
-        pygame.draw.circle(glow, (180, 190, 230, a), (r * 2, r * 2), i)
+        a = int(26 * (i / (r * 2)))
+        pygame.draw.circle(glow, (245, 220, 130, a), (r * 2, r * 2), i)
     surf.blit(glow, (cx - r * 2, cy - r * 2))
-    moon_disc(surf, cx, cy, r, data.get('moon_illum', 0.5), data.get('moon_wax', True))
+    moon_disc(surf, cx, cy, r, data.get('moon_illum', 0.5), data.get('moon_wax', True), lit=(250, 226, 120))
     draw_text(surf, data.get('moon_name', ''), fit_font(data.get('moon_name', ''), w - 12, 24, True),
-              (230, 230, 245), cx, cy + r + 20, 'mc')
-    draw_text(surf, f"Освітлення {int(data.get('moon_illum',0)*100)}%", font(15), (170, 175, 205),
-              cx, cy + r + 46, 'mc')
+              (245, 235, 200), cx, cy + r + 22, 'mc')
+    draw_text(surf, f"Освітлення {int(data.get('moon_illum',0)*100)}%", font(15), (200, 190, 160),
+              cx, cy + r + 48, 'mc')
 
 def _b_astro_forecast(surf, rect, p, data):
     card(surf, rect, 'Прогноз дня ✨', C.PURPLE)
@@ -576,6 +590,7 @@ def draw_block(surf, block, data, W=None, H=None, cols=GRID_COLS, rows=GRID_ROWS
 def render_layout(surf, layout, data, W=None, H=None):
     W = W or C.W; H = H or C.H
     cols = layout.get('cols', GRID_COLS); rows = layout.get('rows', GRID_ROWS)
+    HITS.clear()
     if layout.get('bg') == 'cosmic':
         _draw_cosmic_bg(surf, W, H)
     else:
@@ -635,6 +650,7 @@ def demo_data():
         'kp_hist': [(now - (7 - i) * 10800, [2, 3, 4, 5, 6, 5, 4, 5][i]) for i in range(8)],
         'kp_days': [{'date': '2026-07-08', 'max': 5}, {'date': '2026-07-09', 'max': 4}, {'date': '2026-07-10', 'max': 6}],
         'aurora': {'need': 8, 'possible': False, 'text': 'Аврора — за Kp ≥ 8 (зараз 5)'},
+        'kp_ts': now, 'loading': False,
         'retro_detail': [
             {'planet': 'Меркурій', 'glyph': '☿', 'start': '29.06', 'end': '23.07', 'days_left': 8, 'total': 24, 'progress': 0.66, 'phase': 'середина', 'area': 'спілкування', 'advice': ''},
             {'planet': 'Сатурн', 'glyph': '♄', 'start': '13.07', 'end': '28.11', 'days_left': 136, 'total': 138, 'progress': 0.01, 'phase': 'початок', 'area': 'дисципліна', 'advice': ''},

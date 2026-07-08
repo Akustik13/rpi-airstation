@@ -10,8 +10,9 @@ from urllib.request import urlopen, Request
 ONLINE = [False]
 _LOCK = threading.Lock()
 DATA = {'wind_kmh': None, 'wind_dir': None, 'uv': None, 'daily': [], 'kp': None,
-        'kp_hist': [], 'kp_days': [], 'ts': 0.0}
+        'kp_hist': [], 'kp_days': [], 'ts': 0.0, 'kp_ts': 0.0, 'loading': False}
 _started = [False]
+_wake = threading.Event()
 
 def is_online():
     return ONLINE[0]
@@ -20,10 +21,18 @@ def get():
     with _LOCK:
         return dict(DATA)
 
+def force_refresh():
+    """Примусово розбудити фоновий потік для негайного стягування даних."""
+    with _LOCK:
+        DATA['loading'] = True
+    _wake.set()
+
 def _check_socket():
-    for host in (('1.1.1.1', 53), ('8.8.8.8', 53)):
+    # Порт 443 (HTTPS) — практично завжди відкритий за наявності інтернету.
+    # (порт 53 часто блокують, тож ним не користуємось.)
+    for host in (('1.1.1.1', 443), ('8.8.8.8', 443), ('services.swpc.noaa.gov', 443)):
         try:
-            s = socket.create_connection(host, timeout=3); s.close(); return True
+            s = socket.create_connection(host, timeout=4); s.close(); return True
         except Exception:
             continue
     return False
@@ -79,10 +88,13 @@ def _fetch_kp_forecast():
     url = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json'
     with urlopen(Request(url, headers=_UA), timeout=6) as r:
         rows = json.load(r)
+    today = time.strftime('%Y-%m-%d', time.gmtime())
     perday = {}
     for row in rows[1:]:
         try:
             day = row[0].split(' ')[0]; kp = float(row[1])
+            if day < today:
+                continue
             perday[day] = max(perday.get(day, 0), kp)
         except Exception:
             continue
@@ -93,6 +105,7 @@ def _worker(get_latlon):
     while True:
         on = _check_socket()
         ONLINE[0] = on
+        got_any = False
         if on:
             try:
                 lat, lon = get_latlon()
@@ -114,6 +127,7 @@ def _worker(get_latlon):
                                  'wind_dir': cur.get('wind_direction_10m'),
                                  'uv': cur.get('uv_index'),
                                  'daily': daily, 'ts': time.time()})
+                got_any = True
             except Exception:
                 pass
             try:
@@ -121,10 +135,18 @@ def _worker(get_latlon):
                 days = _fetch_kp_forecast()
                 kp = hist[-1][1] if hist else _fetch_kp()
                 with _LOCK:
-                    DATA['kp'] = kp; DATA['kp_hist'] = hist; DATA['kp_days'] = days
+                    DATA['kp'] = kp; DATA['kp_hist'] = hist; DATA['kp_days'] = days; DATA['kp_ts'] = time.time()
+                got_any = True
             except Exception:
                 pass
-        time.sleep(900 if on else 30)
+        # успішний фетч = точно онлайн (навіть якщо проба сокета збрехала)
+        if got_any:
+            ONLINE[0] = True
+        with _LOCK:
+            DATA['loading'] = False
+        # переривчастий сон: прокидаємось раніше за force_refresh()
+        _wake.clear()
+        _wake.wait(timeout=(900 if on else 30))
 
 def start(get_latlon):
     if _started[0]:

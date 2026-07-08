@@ -1069,6 +1069,7 @@ def main():
                     SW = 70
                     if abs(dx) > SW and abs(dx) > abs(dy):
                         # свайп → перелистування дизайнів. Бокова панель НЕ виїжджає.
+                        _astro_detail[0] = None
                         _page_screen(1 if dx < 0 else -1)
                         if _ui_shown[0] and _auto_hide_enabled():
                             _ui_shown[0] = False
@@ -1081,26 +1082,40 @@ def main():
                             else:
                                 _reveal_ui()
                         else:
-                            if _ui_shown[0] or not _auto_hide_enabled():
-                                _reveal_ui()
-                            for key, rect in clickable_rects().items():
-                                if rect.collidepoint(up_pos):
-                                    if key == '__menu__' or key == '__hburger__':
-                                        state = State.MENU
-                                    elif key == '__exit__':
-                                        poller.stop(); pygame.quit(); sys.exit(0)
-                                    elif key == '__main__':
-                                        state = State.MAIN
-                                    elif key == '__graphs__':
-                                        state = State.GRAPHSEL
-                                    elif key == '__data__':
-                                        state = State.DATA
-                                    elif key == '__about__':
-                                        state = State.ABOUT
-                                    else:
-                                        chart_key = key
-                                        state = State.CHART
-                                    break
+                            # відкритий оверлей деталей планети — тап закриває
+                            if _astro_detail[0]:
+                                _astro_detail[0] = None
+                            else:
+                                # тап-регіони grid-екрана (оновити бурі / планета)
+                                _grid_hit = None
+                                for act, rect in list(GUI.HITS):
+                                    if rect.collidepoint(up_pos):
+                                        _grid_hit = act; break
+                                if _grid_hit == 'astro_refresh':
+                                    _astro_do_refresh()
+                                elif _grid_hit and _grid_hit.startswith('planet:'):
+                                    _astro_detail[0] = _grid_hit.split(':', 1)[1]
+                                else:
+                                    if _ui_shown[0] or not _auto_hide_enabled():
+                                        _reveal_ui()
+                                    for key, rect in clickable_rects().items():
+                                        if rect.collidepoint(up_pos):
+                                            if key == '__menu__' or key == '__hburger__':
+                                                state = State.MENU
+                                            elif key == '__exit__':
+                                                poller.stop(); pygame.quit(); sys.exit(0)
+                                            elif key == '__main__':
+                                                state = State.MAIN
+                                            elif key == '__graphs__':
+                                                state = State.GRAPHSEL
+                                            elif key == '__data__':
+                                                state = State.DATA
+                                            elif key == '__about__':
+                                                state = State.ABOUT
+                                            else:
+                                                chart_key = key
+                                                state = State.CHART
+                                            break
                         _dirty = True
 
         # Redraw if state changed
@@ -1113,6 +1128,8 @@ def main():
                 _ota_auto_check_on_open()
             if state != State.MENU:
                 _dropdown[0] = None
+            if state != State.MAIN:
+                _astro_detail[0] = None
             _last_state = state
 
         # Автоприховування бокової панелі / напису після N секунд без дотиків
@@ -5197,6 +5214,7 @@ def _grid_data():
         'kp': kp, 'kp_label': klab, 'retro': retro_names,
         'kp_hist': nd.get('kp_hist', []), 'kp_days': nd.get('kp_days', []),
         'aurora': aurora, 'retro_detail': retro_detail,
+        'kp_ts': nd.get('kp_ts', 0), 'loading': nd.get('loading', False),
         'astro_forecast': wx.astro_forecast(kp, retro_names, idx, aurora, i18n.get_lang()),
         'advice': wx.advice_of_day(now, kp=kp, uv=uv, moon_idx=idx, lang=i18n.get_lang()),
     }
@@ -5219,6 +5237,8 @@ def _draw_current_screen():
             hb = text_at(screen, '☰', FNT_BIG, C.WHITE, C.W - 30, C.H - 30, 'mc')
             MAIN_RECTS['__hburger__'] = pygame.Rect(hb.left - 14, hb.top - 14, hb.width + 28, hb.height + 28)
             _wx_overlay(_ui_shown[0] or not ah)
+            if _astro_detail[0]:
+                _draw_planet_detail(_astro_detail[0])
             pygame.display.update()
             return
         except Exception:
@@ -5766,6 +5786,65 @@ def _about_hit(pos):
     if pygame.Rect(C.W - 74, C.H - 56, 56, 48).collidepoint(pos):
         _about_scroll[0] += 120; return True
     return False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  v28 — примусове оновлення астро-даних + деталі планети по тапу (Крок 2).
+# ══════════════════════════════════════════════════════════════════════════════
+
+_astro_detail = [None]   # ім'я планети для оверлея деталей, або None
+
+def _astro_do_refresh():
+    try:
+        net.force_refresh()
+    except Exception:
+        pass
+
+def _draw_planet_detail(name):
+    now = datetime.now()
+    det = None
+    for d in wx.retrograde_detail(now, i18n.get_lang()):
+        if d['planet'] == name:
+            det = d; break
+    # затемнення + картка
+    ov = pygame.Surface((C.W, C.H), pygame.SRCALPHA); ov.fill((6, 8, 18, 200)); screen.blit(ov, (0, 0))
+    card = pygame.Rect(200, 90, C.W - 400, C.H - 180)
+    fill_rect(screen, C.PANEL, card, radius=18); stroke_rect(screen, C.PURPLE, card, 2, radius=18)
+    x = card.x + 40; y = card.y + 30
+    glyph = det['glyph'] if det else '•'
+    text_at(screen, glyph, _wf(64), C.PURPLE, x, y, 'tl')
+    text_at(screen, name, _wf(40, True), C.WHITE, x + 90, y + 6, 'tl')
+    text_at(screen, 'ретроградний рух' if det else 'прямий рух', _wf(18), C.CYAN, x + 92, y + 52, 'tl')
+    if det:
+        yy = y + 110
+        text_at(screen, f"Період: {det['start']} – {det['end']}", _wf(22), C.TEXT2, x, yy, 'tl'); yy += 34
+        text_at(screen, f"Залишилось: {det['days_left']} днів  ·  фаза: {det['phase']}", _wf(22), C.TEXT2, x, yy, 'tl'); yy += 40
+        # прогрес-смуга періоду
+        bw = card.w - 80
+        fill_rect(screen, C.PANEL2, (x, yy, bw, 16), radius=8)
+        fill_rect(screen, C.PURPLE, (x, yy, int(bw * det['progress']), 16), radius=8)
+        text_at(screen, 'початок', _wf(13), C.MUTED, x, yy + 24, 'tl')
+        text_at(screen, 'кінець', _wf(13), C.MUTED, x + bw, yy + 24, 'tr'); yy += 60
+        text_at(screen, 'Сфера впливу:', _wf(18, True), C.YELLOW, x, yy, 'tl'); yy += 28
+        for ln in _wrap_text(det.get('area', ''), _wf(20), card.w - 80):
+            text_at(screen, ln, _wf(20), C.TEXT2, x, yy, 'tl'); yy += 28
+        yy += 8
+        text_at(screen, 'Як поводитись:', _wf(18, True), C.GREEN, x, yy, 'tl'); yy += 28
+        for ln in _wrap_text(det.get('advice', ''), _wf(20), card.w - 80):
+            text_at(screen, ln, _wf(20), C.TEXT2, x, yy, 'tl'); yy += 28
+    else:
+        text_at(screen, 'Зараз ця планета в прямому русі.', _wf(22), C.TEXT2, x, y + 120, 'tl')
+    text_at(screen, '* астрологічні трактування — традиція, для настрою; тап — закрити',
+            _wf(14), C.MUTED, card.centerx, card.bottom - 22, 'mc')
+
+def _wrap_text(txt, fnt, max_w):
+    words = (txt or '').split(' '); lines = ['']
+    for w in words:
+        if fnt.size((lines[-1] + ' ' + w).strip())[0] > max_w:
+            lines.append(w)
+        else:
+            lines[-1] = (lines[-1] + ' ' + w).strip()
+    return [l for l in lines if l]
 
 
 if __name__ == '__main__':
