@@ -132,12 +132,25 @@ def ic_co2(surf, cx, cy, col=C.GREEN):
     pygame.draw.circle(surf, col, (cx - 10, cy), 11); pygame.draw.circle(surf, col, (cx + 6, cy - 6), 14)
     pygame.draw.circle(surf, col, (cx + 16, cy), 10); pygame.draw.rect(surf, col, (cx - 14, cy, 34, 12), border_radius=6)
     surf.blit(font(12, True).render('CO₂', True, (10, 20, 15)), (cx - 12, cy - 6))
-def moon_disc(surf, cx, cy, r, illum, wax, lit=(232, 232, 214)):
+_CRATERS = [(-0.35, -0.30, 0.16), (0.25, -0.15, 0.12), (-0.10, 0.30, 0.14),
+            (0.40, 0.28, 0.09), (-0.45, 0.10, 0.08), (0.10, -0.45, 0.07), (0.05, 0.05, 0.10)]
+
+def moon_disc(surf, cx, cy, r, illum, wax, lit=(232, 232, 214), craters=False):
     pygame.draw.circle(surf, (18, 24, 40), (cx, cy), r + 3); pygame.draw.circle(surf, (60, 66, 84), (cx, cy), r)
     for yy in range(-r, r + 1):
-        hw = int(math.sqrt(max(0, r * r - yy * yy))); tx = int(hw * (2 * illum - 1))
+        hw = int(math.sqrt(max(0, r * r - yy * yy))); tx = int(hw * (1 - 2 * illum))
         x0, x1 = (tx, hw) if wax else (-hw, -tx)
         if x1 > x0: pygame.draw.line(surf, lit, (cx + x0, cy + yy), (cx + x1, cy + yy))
+    if craters and r >= 36:
+        cs = pygame.Surface((2 * r, 2 * r), pygame.SRCALPHA)
+        for (rx, ry, rf) in _CRATERS:
+            ccx = int(r + rx * r); ccy = int(r + ry * r); cr = max(3, int(rf * r))
+            pygame.draw.circle(cs, (60, 58, 66, 85), (ccx, ccy), cr)
+            pygame.draw.circle(cs, (150, 148, 160, 60), (ccx, ccy), cr, 1)
+        mask = pygame.Surface((2 * r, 2 * r), pygame.SRCALPHA)
+        pygame.draw.circle(mask, (255, 255, 255, 255), (r, r), r)
+        cs.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        surf.blit(cs, (cx - r, cy - r))
     pygame.draw.circle(surf, (90, 96, 120), (cx, cy), r, 1)
 def sun_icon(surf, cx, cy, r, col=C.YELLOW):
     for a in range(0, 360, 45):
@@ -470,14 +483,14 @@ def _b_astro_moon(surf, rect, p, data):
     x, y, w, h = rect
     r = max(40, int(min(w, h) * 0.30))          # менший місяць
     cx, cy = x + w // 2, y + r + 22
-    # тепле світіння (компактне)
-    gr = int(r * 1.35)
+    # тепле світіння (дуже компактне)
+    gr = int(r * 1.15)
     glow = pygame.Surface((gr * 2, gr * 2), pygame.SRCALPHA)
-    for i in range(gr, 0, -5):
-        a = int(30 * (i / gr))
+    for i in range(gr, 0, -4):
+        a = int(26 * (i / gr))
         pygame.draw.circle(glow, (245, 220, 130, a), (gr, gr), i)
     surf.blit(glow, (cx - gr, cy - gr))
-    moon_disc(surf, cx, cy, r, data.get('moon_illum', 0.5), data.get('moon_wax', True), lit=(250, 226, 120))
+    moon_disc(surf, cx, cy, r, data.get('moon_illum', 0.5), data.get('moon_wax', True), lit=(250, 226, 120), craters=True)
     draw_text(surf, data.get('moon_name', ''), fit_font(data.get('moon_name', ''), w - 12, 24, True),
               (245, 235, 200), cx, cy + r + 22, 'mc')
     draw_text(surf, f"Освітлення {int(data.get('moon_illum',0)*100)}%", font(15), (200, 190, 160),

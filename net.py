@@ -13,6 +13,7 @@ DATA = {'wind_kmh': None, 'wind_dir': None, 'uv': None, 'daily': [], 'kp': None,
         'kp_hist': [], 'kp_days': [], 'ts': 0.0, 'kp_ts': 0.0, 'loading': False}
 _started = [False]
 _wake = threading.Event()
+_UA = {'User-Agent': 'airstation/1.0'}
 
 def is_online():
     return ONLINE[0]
