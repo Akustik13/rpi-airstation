@@ -434,15 +434,19 @@ def _b_kp_storms(surf, rect, p, data):
     au = data.get('aurora', {})
     draw_text(surf, au.get('text', ''), font(15), C.GREEN if au.get('possible') else C.TEXT2,
               x + 20, y + gy - y + gh + 52, 'tl')
-    # 3-денний прогноз
+    # 3-денний прогноз (міні-стовпчики)
     days = data.get('kp_days', [])
     if days and h > 150:
-        draw_text(surf, 'Прогноз:', font(15), C.MUTED, x + 20, y + h - 26, 'ml')
-        dx = x + 110
-        for d in days[:3]:
+        draw_text(surf, 'Прогноз (3 дні):', font(15), C.MUTED, x + 20, y + h - 30, 'ml')
+        base = y + h - 14; maxh = 30; cw = 58
+        bx0 = x + 150
+        for i, d in enumerate(days[:3]):
             lab = _weekday_short(d.get('date', '')); mx = d.get('max', 0)
-            draw_text(surf, f"{lab} {mx:.0f}", font(16, True), _kp_col(mx), dx, y + h - 26, 'ml')
-            dx += 92
+            bx = bx0 + i * cw
+            bh = max(3, int(maxh * min(1.0, mx / 9.0)))
+            pygame.draw.rect(surf, _kp_col(mx), (bx, base - bh, 26, bh), border_radius=3)
+            draw_text(surf, f'{mx:.0f}', font(13, True), _kp_col(mx), bx + 13, base - bh - 9, 'mc')
+            draw_text(surf, lab, font(13), C.TEXT2, bx + 13, base + 2, 'tc')
     surf.set_clip(prev)
 
 def _weekday_short(datestr):

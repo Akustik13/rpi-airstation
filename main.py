@@ -4514,12 +4514,16 @@ def _net_mark(x, y, r=6):
     pygame.draw.arc(screen, C.BLUE, (x - r + 2, y - r, 2 * (r - 2), 2 * r), math.radians(90), math.radians(270), 1)
 
 def _net_indicator(x, y):
+    """Індикатор мережі: стовпчики сигналу + підпис. (x, y) — базова лінія знизу."""
     on = _net_online()
     col = C.GREEN if on else C.MUTED
-    for rr in (5, 9, 13):
-        pygame.draw.arc(screen, col, (x - rr, y - rr, rr * 2, rr * 2), math.radians(225), math.radians(315), 2)
-    pygame.draw.circle(screen, col, (x, y + 5), 2)
-    text_at(screen, 'online' if on else 'offline', FNT_TINY, col, x + 22, y, 'ml')
+    for i, bh in enumerate((6, 10, 14)):
+        bx = x + i * 7
+        c = col if on else C.BORDER
+        pygame.draw.rect(screen, c, (bx, y - bh, 5, bh), border_radius=1)
+    if not on:
+        pygame.draw.line(screen, C.RED, (x - 2, y - 16), (x + 20, y + 2), 2)
+    text_at(screen, 'online' if on else 'offline', FNT_TINY, col, x + 30, y - 7, 'ml')
 
 # ── Дрібні векторні іконки для метео-екранів ──────────────────────────────────
 def _ic_thermo(cx, cy, col=C.CYAN):
@@ -4608,7 +4612,7 @@ def _wx_overlay(sidebar_shown):
     else:
         _pull_tab()
     # маркер поточного дизайну + інтернет-індикатор (правий низ)
-    _net_indicator(C.W - 120, C.H - 16)
+    _net_indicator(C.W - 96, 26)
 
 
 # ── Графік тиску 24 год + тренд по 3 год (для дизайнів 1 і 4) ──────────────────
