@@ -1071,8 +1071,7 @@ def main():
                         # свайп → перелистування дизайнів. Бокова панель НЕ виїжджає.
                         _astro_detail[0] = None
                         _page_screen(1 if dx < 0 else -1)
-                        _slideshow_last[0] = time.time()      # не зсовуємо авто одразу після ручного
-                        _slide_trans['old'] = _slide_trans['new'] = None  # скидаємо слайд
+                        _slideshow_last[0] = time.time()   # не зсовуємо авто одразу після ручного
                         if _ui_shown[0] and _auto_hide_enabled():
                             _ui_shown[0] = False
                         _dirty = True
@@ -1167,23 +1166,7 @@ def main():
             _needs_redraw = False
 
             if state == State.MAIN:
-                if _slide_trans['old'] is not None:
-                    # анімація слайду — НЕ викликаємо draw, просто композитимо два surfaced
-                    elapsed = time.time() - _slide_trans['start']
-                    t       = min(1.0, elapsed / 0.45)
-                    eased   = 1.0 - (1.0 - t) ** 2   # ease-out quadratic
-                    off     = int(eased * C.W)
-                    screen.blit(_slide_trans['new'], (C.W - off, 0))
-                    screen.blit(_slide_trans['old'], (-off, 0))
-                    pygame.display.update()
-                    if t >= 1.0:
-                        _slide_trans['old'] = None
-                        _slide_trans['new'] = None
-                        _dirty = True   # ще один кадр без слайду щоб draw оновив
-                    else:
-                        _dirty = True
-                else:
-                    _draw_current_screen()
+                _draw_current_screen()
 
             elif state == State.CHART and chart_key:
                 draw_chart(chart_key)
@@ -5895,16 +5878,6 @@ def _wrap_text(txt, fnt, max_w):
 # ══════════════════════════════════════════════════════════════════════════════
 
 _slideshow_last = [0.0]
-# old/new — два готових surface для compositing; обидва None = анімації немає
-_slide_trans    = {'start': 0.0, 'old': None, 'new': None}
-_suppress_flip  = [False]   # True — всі pygame.display.update() всередині draw ігноруються
-
-# Monkey-patch: щоб pre-рендер нового екрана не мигав на дисплеї
-_real_flip = pygame.display.update
-def _patched_flip(*a, **kw):
-    if not _suppress_flip[0]:
-        _real_flip(*a, **kw)
-pygame.display.update = _patched_flip
 
 
 def _slideshow_enabled():
@@ -5919,39 +5892,17 @@ def _slideshow_sec():
 
 
 def _tick_slideshow():
-    """Повертає True якщо треба запустити слайд-анімацію."""
+    """Повертає True якщо відбулась зміна екрана."""
     if not _slideshow_enabled():
         return False
     if len(_all_screens()) < 2:
         return False
     if time.time() - _slideshow_last[0] < _slideshow_sec():
         return False
-
-    # 1. знімок СТАРОГО екрана
-    old_surf = screen.copy()
-
-    # 2. перемикаємо screen_id на наступний екран
     _page_screen(1)
     if _auto_hide_enabled():
         _ui_shown[0] = False
-
-    # 3. pre-рендеримо НОВИЙ екран тихо (без показу на дисплеї)
-    _suppress_flip[0] = True
-    try:
-        _draw_current_screen()
-    except Exception:
-        pass
-    _suppress_flip[0] = False
-    new_surf = screen.copy()
-
-    # 4. відновлюємо старий екран на дисплеї — анімація стартує з нього
-    screen.blit(old_surf, (0, 0))
-    _real_flip()
-
-    _slide_trans['old']   = old_surf
-    _slide_trans['new']   = new_surf
-    _slide_trans['start'] = time.time()
-    _slideshow_last[0]    = time.time()
+    _slideshow_last[0] = time.time()
     return True
 
 
