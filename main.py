@@ -1072,7 +1072,7 @@ def main():
                         _astro_detail[0] = None
                         _page_screen(1 if dx < 0 else -1)
                         _slideshow_last[0] = time.time()   # не зсовуємо авто одразу після ручного
-                        _slide_trans['alpha'] = 0          # скидаємо незавершений crossfade
+                        _slide_trans['surf'] = None         # скидаємо незавершений слайд
                         if _ui_shown[0] and _auto_hide_enabled():
                             _ui_shown[0] = False
                         _dirty = True
@@ -1168,13 +1168,18 @@ def main():
 
             if state == State.MAIN:
                 _draw_current_screen()
-                # плавний crossfade між слайдами
-                if _slide_trans['alpha'] > 0:
-                    _slide_trans['surf'].set_alpha(_slide_trans['alpha'])
-                    screen.blit(_slide_trans['surf'], (0, 0))
+                # слайд-перехід: старий екран їде вліво, новий виїжджає справа
+                if _slide_trans['surf'] is not None:
+                    elapsed  = time.time() - _slide_trans['start']
+                    duration = 0.45
+                    t        = min(1.0, elapsed / duration)
+                    eased    = 1.0 - (1.0 - t) ** 2   # ease-out quadratic
+                    off      = int(eased * C.W)
+                    screen.blit(_slide_trans['surf'], (-off, 0))
                     pygame.display.update()
-                    _slide_trans['alpha'] = max(0, _slide_trans['alpha'] - 45)
-                    if _slide_trans['alpha'] > 0:
+                    if t >= 1.0:
+                        _slide_trans['surf'] = None
+                    else:
                         _dirty = True
 
             elif state == State.CHART and chart_key:
@@ -5887,7 +5892,7 @@ def _wrap_text(txt, fnt, max_w):
 # ══════════════════════════════════════════════════════════════════════════════
 
 _slideshow_last = [0.0]
-_slide_trans    = {'alpha': 0, 'surf': None}
+_slide_trans    = {'start': 0.0, 'surf': None}   # surf=None → анімації немає
 
 
 def _slideshow_enabled():
@@ -5909,8 +5914,8 @@ def _tick_slideshow():
         return False
     if time.time() - _slideshow_last[0] < _slideshow_sec():
         return False
-    _slide_trans['surf']  = screen.copy()
-    _slide_trans['alpha'] = 220
+    _slide_trans['surf']  = screen.copy()   # знімок старого екрана
+    _slide_trans['start'] = time.time()
     _page_screen(1)
     if _auto_hide_enabled():
         _ui_shown[0] = False
