@@ -5633,7 +5633,7 @@ def _draw_menu_screens_v14():
     x, y = 150, 110
     text_at(screen, T('car_title'), FNT_SMALL, C.TEXT2, x, y, 'tl')
     text_at(screen, T('car_hint'), FNT_TINY, C.MUTED, x, y + 24, 'tl')
-    _v14_button('scrnew', (C.W - 230, y - 6, 210, 44), C.GREEN, '＋ Новий екран')
+    _v14_button('scrnew', (C.W - 230, 12, 210, 46), C.GREEN, '＋ Новий екран')
     enabled = _car_list(); avail = _car_available()
     ordered = enabled + [s for s in avail if s not in enabled]
     cur = db.get_setting('screen_id', 'air')
@@ -5666,7 +5666,7 @@ def _draw_menu_screens_v14():
         row_y += 52
 
     # ── Слайдшоу ──────────────────────────────────────────────────────────────
-    sp_y = min(row_y + 4, C.H - 148)
+    sp_y = row_y + 4
     sl_on  = _slideshow_enabled()
     sl_sec = _slideshow_sec()
     sp_rect = (x, sp_y, 700, 52)
