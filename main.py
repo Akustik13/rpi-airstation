@@ -1071,6 +1071,8 @@ def main():
                         # свайп → перелистування дизайнів. Бокова панель НЕ виїжджає.
                         _astro_detail[0] = None
                         _page_screen(1 if dx < 0 else -1)
+                        _slideshow_last[0] = time.time()   # не зсовуємо авто одразу після ручного
+                        _slide_trans['alpha'] = 0          # скидаємо незавершений crossfade
                         if _ui_shown[0] and _auto_hide_enabled():
                             _ui_shown[0] = False
                         _dirty = True
@@ -1139,6 +1141,11 @@ def main():
             if _ui_shown[0] != _prev_shown:
                 _dirty = True
 
+        # Автопрокрутка слайдів
+        if state == State.MAIN:
+            if _tick_slideshow():
+                _dirty = True
+
         # Redraw main if new data arrived
         with data_lock:
             ts = latest.get('ts', 0)
@@ -1161,6 +1168,14 @@ def main():
 
             if state == State.MAIN:
                 _draw_current_screen()
+                # плавний crossfade між слайдами
+                if _slide_trans['alpha'] > 0:
+                    _slide_trans['surf'].set_alpha(_slide_trans['alpha'])
+                    screen.blit(_slide_trans['surf'], (0, 0))
+                    pygame.display.update()
+                    _slide_trans['alpha'] = max(0, _slide_trans['alpha'] - 45)
+                    if _slide_trans['alpha'] > 0:
+                        _dirty = True
 
             elif state == State.CHART and chart_key:
                 draw_chart(chart_key)
@@ -4032,8 +4047,6 @@ def draw_main():
         st_col = C.GREEN if ok_any else C.RED
         r = text_at(screen, T('online') if ok_any else T('offline'), FNT_SMALL, st_col, C.W - 64, 22, 'tr')
         pygame.draw.circle(screen, st_col, (r.left - 16, r.centery), 7)
-        hb = text_at(screen, '☰', FNT_BIG, C.WHITE, C.W - 30, 32, 'mc')
-        MAIN_RECTS['__hburger__'] = pygame.Rect(hb.left - 12, hb.top - 12, hb.width + 24, hb.height + 24)
         top = 58
     else:
         top = 14
@@ -4144,10 +4157,6 @@ def draw_weather():
     rw = C.W - rx - 16
     cxmid = rx + rw // 2
     now = datetime.now()
-
-    # Гамбургер (доступ до меню, коли панель прихована свайпом ще не зроблено)
-    hb = text_at(screen, '☰', FNT_BIG, C.WHITE, C.W - 30, 26, 'mc')
-    MAIN_RECTS['__hburger__'] = pygame.Rect(hb.left - 14, hb.top - 14, hb.width + 28, hb.height + 28)
 
     # ── Місяць (угорі по центру) ──
     age, illum, idx = wx.moon_phase()
@@ -4720,8 +4729,6 @@ def draw_wx1():
     _t(l1, _wf(21), C.TEXT2, rx + 146, 606 + 40, 'ml')
     if l2: _t(l2, _wf(21), C.TEXT2, rx + 146, 606 + 68, 'ml')
 
-    hb = text_at(screen, '☰', FNT_BIG, C.WHITE, C.W - 30, 24, 'mc')
-    MAIN_RECTS['__hburger__'] = pygame.Rect(hb.left - 14, hb.top - 14, hb.width + 28, hb.height + 28)
     ah = _auto_hide_enabled(); _wx_overlay(_ui_shown[0] or not ah)
     pygame.display.update()
 
@@ -4782,8 +4789,6 @@ def draw_wx4():
     _t(f'AQI {_v12_fmt(aqi,0)}', _wf(28, True), C.WHITE, rx + 22, 518 + 34, 'tl'); _t(st, _wf(21), sc, rx + rw - 18, 518 + 38, 'tr')
     _grad_bar_frac((rx + 22, 518 + 76, rw - 44, 22), (aqi or 0) / 300.)
 
-    hb = text_at(screen, '☰', FNT_BIG, C.WHITE, C.W - 30, C.H - 30, 'mc')
-    MAIN_RECTS['__hburger__'] = pygame.Rect(hb.left - 14, hb.top - 14, hb.width + 28, hb.height + 28)
     ah = _auto_hide_enabled(); _wx_overlay(_ui_shown[0] or not ah)
     pygame.display.update()
 
@@ -5056,6 +5061,14 @@ def menu_hit(pos, buttons):
         if label.startswith('carsel:'): _car_toggle(label.split(':', 1)[1]); return
         if label.startswith('carup:'): _car_move(label.split(':', 1)[1], -1); return
         if label.startswith('cardn:'): _car_move(label.split(':', 1)[1], 1); return
+        if label == 'slideshow:toggle':
+            db.set_setting('slideshow', '0' if _slideshow_enabled() else '1')
+            _slideshow_last[0] = time.time()
+            _menu_msg[0] = T('saved'); return
+        if label == 'slideshow_sec:-':
+            db.set_setting('slideshow_sec', str(max(2, _slideshow_sec() - 1))); return
+        if label == 'slideshow_sec:+':
+            db.set_setting('slideshow_sec', str(min(60, _slideshow_sec() + 1))); return
         if label == 'scrnew': _screen_create(); return
         if label.startswith('scrmgr:'): _scr_sel[0] = label.split(':', 1)[1]; return
         if label.startswith('scredit:'): _editor_open(_layout_path(label.split(':', 1)[1][5:])); return
@@ -5238,8 +5251,6 @@ def _draw_current_screen():
             MAIN_RECTS = {}
             _draw_grid_screen(sid[5:])
             ah = _auto_hide_enabled()
-            hb = text_at(screen, '☰', FNT_BIG, C.WHITE, C.W - 30, C.H - 30, 'mc')
-            MAIN_RECTS['__hburger__'] = pygame.Rect(hb.left - 14, hb.top - 14, hb.width + 28, hb.height + 28)
             _wx_overlay(_ui_shown[0] or not ah)
             if _astro_detail[0]:
                 _draw_planet_detail(_astro_detail[0])
@@ -5663,6 +5674,26 @@ def _draw_menu_screens_v14():
             text_at(screen, '▲', FNT_SMALL, C.ACCENT, up.centerx, up.centery, 'mc'); text_at(screen, '▼', FNT_SMALL, C.ACCENT, dn.centerx, dn.centery, 'mc')
         row_y += 52
 
+    # ── Слайдшоу ──────────────────────────────────────────────────────────────
+    sp_y = min(row_y + 4, C.H - 148)
+    sl_on  = _slideshow_enabled()
+    sl_sec = _slideshow_sec()
+    sp_rect = (x, sp_y, 700, 52)
+    fill_rect(screen, C.PANEL2 if sl_on else C.PANEL, sp_rect, radius=10)
+    stroke_rect(screen, C.ACCENT if sl_on else C.BORDER, sp_rect, 2 if sl_on else 1, radius=10)
+    text_at(screen, '⏱ Автопрокрутка', FNT_SMALL, C.WHITE if sl_on else C.MUTED, x + 16, sp_y + 26, 'ml')
+    tog = pygame.Rect(x + 290, sp_y + 10, 92, 32)
+    _menu_buttons_v14.append(('slideshow:toggle', tog))
+    fill_rect(screen, C.GREEN if sl_on else C.PANEL, tog, radius=8)
+    stroke_rect(screen, C.GREEN if sl_on else C.BORDER, tog, 1, radius=8)
+    text_at(screen, 'Вкл' if sl_on else 'Викл', FNT_SMALL, C.WHITE, tog.centerx, tog.centery, 'mc')
+    if sl_on:
+        _v14_button('slideshow_sec:-', (x + 400, sp_y + 10, 44, 32), C.ORANGE, '−')
+        text_at(screen, f'{sl_sec} с', FNT_MED, C.ACCENT, x + 468, sp_y + 26, 'mc')
+        _v14_button('slideshow_sec:+', (x + 500, sp_y + 10, 44, 32), C.GREEN, '+')
+    else:
+        text_at(screen, 'вимкнено', FNT_TINY, C.MUTED, x + 400, sp_y + 26, 'ml')
+
     # панель дій для вибраного кастомного екрана
     if _scr_sel[0] and _scr_sel[0].startswith('grid:'):
         sid = _scr_sel[0]
@@ -5849,6 +5880,42 @@ def _wrap_text(txt, fnt, max_w):
         else:
             lines[-1] = (lines[-1] + ' ' + w).strip()
     return [l for l in lines if l]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  v34 — Автопрокрутка екранів (слайдшоу) + прибирання кнопки ☰.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_slideshow_last = [0.0]
+_slide_trans    = {'alpha': 0, 'surf': None}
+
+
+def _slideshow_enabled():
+    return db.get_setting('slideshow', '0') == '1'
+
+
+def _slideshow_sec():
+    try:
+        return max(2, int(db.get_setting('slideshow_sec', '5')))
+    except Exception:
+        return 5
+
+
+def _tick_slideshow():
+    """Повертає True якщо відбулась зміна слайда (викликати щоітерації в State.MAIN)."""
+    if not _slideshow_enabled():
+        return False
+    if len(_all_screens()) < 2:
+        return False
+    if time.time() - _slideshow_last[0] < _slideshow_sec():
+        return False
+    _slide_trans['surf']  = screen.copy()
+    _slide_trans['alpha'] = 220
+    _page_screen(1)
+    if _auto_hide_enabled():
+        _ui_shown[0] = False
+    _slideshow_last[0] = time.time()
+    return True
 
 
 if __name__ == '__main__':
